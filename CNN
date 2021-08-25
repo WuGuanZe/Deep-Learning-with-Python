@@ -1,0 +1,1029 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "01_Convolutional Neural Network",
+      "provenance": [],
+      "collapsed_sections": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    },
+    "accelerator": "GPU"
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "ReL0nPqDbag8"
+      },
+      "source": [
+        "# **EX01. 計算捲積**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "_A3LDgfmbJZE",
+        "outputId": "77034974-78c6-41e6-cbb9-a4a912f980e9"
+      },
+      "source": [
+        "import numpy as np\n",
+        "\n",
+        "# Test\n",
+        "source = np.array(list('111111111110111100111000110000100000')).astype(np.int)\n",
+        "source = source.reshape(6,6)\n",
+        "print('原始資料：')\n",
+        "print(source)\n",
+        "\n",
+        "# Filter\n",
+        "filter = np.array(list('1111111011001000')).astype(np.int).reshape(4,4)\n",
+        "print('\\n濾波器:')\n",
+        "print(filter)"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "原始資料：\n",
+            "[[1 1 1 1 1 1]\n",
+            " [1 1 1 1 1 0]\n",
+            " [1 1 1 1 0 0]\n",
+            " [1 1 1 0 0 0]\n",
+            " [1 1 0 0 0 0]\n",
+            " [1 0 0 0 0 0]]\n",
+            "\n",
+            "濾波器:\n",
+            "[[1 1 1 1]\n",
+            " [1 1 1 0]\n",
+            " [1 1 0 0]\n",
+            " [1 0 0 0]]\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "F1WQCK6qc5Hq",
+        "outputId": "efb00bbe-ae91-41cf-c62d-862a9ffa03cd"
+      },
+      "source": [
+        "# 初始化計算結果的矩陣\n",
+        "width = height = source.shape[0] - filter.shape[0] + 1\n",
+        "result = np.zeros((width, height))\n",
+        "\n",
+        "# 計算每一格\n",
+        "for i in range(width):\n",
+        "    for j in range(height):\n",
+        "        value01 =source[i:i+filter.shape[0], j:j+filter.shape[1]] * filter\n",
+        "        result[i, j] = np.sum(value01)\n",
+        "print(result)"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "[[10. 10. 10.]\n",
+            " [10. 10.  6.]\n",
+            " [10.  6.  3.]]\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "bEBmhMCEfh_u"
+      },
+      "source": [
+        "## 卷積影像轉換函數"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "Xp61qUDadWCq"
+      },
+      "source": [
+        "# 卷積影像轉換函數\n",
+        "from skimage.exposure import rescale_intensity\n",
+        "\n",
+        "def convolve(image01, kernel01):\n",
+        "    # 取得圖像與濾波器的寬高\n",
+        "    (imgH, imgW) = image01.shape[:2]\n",
+        "    (kerH, kerW) = kernel01.shape[:2]\n",
+        "\n",
+        "    # 計算單邊所需的補零行數\n",
+        "    pad01 = int((kW - 1) / 2)\n",
+        "    image01 = cv2.copyMakeBorder(image01, pad01, pad01, pad01, pad01, cv2.BORDER_REPLICATE)\n",
+        "    output01 = np.zeros((imgH, imgW), dtype=\"float32\")\n",
+        "\n",
+        "    # 卷積\n",
+        "    for y in np.arange(pad01, imgH + pad01):\n",
+        "        for x in np.arange(pad01, imgW + pad01):            \n",
+        "            roi = image01[y - pad01:y + pad01 + 1, x - pad01:x + pad01 + 1]            \n",
+        "            k = (roi * kernel01).sum()\n",
+        "            output01[y - pad01, x - pad01] = k\n",
+        "\n",
+        "    # 調整影像色彩深淺範圍至 (0, 255)\n",
+        "    output01 = rescale_intensity(output01, in_range=(0, 255))\n",
+        "    output01 = (output01 * 255).astype(\"uint8\")\n",
+        "   \n",
+        "    return output01"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "kAqUiJIBhryg"
+      },
+      "source": [
+        "## 灰階化"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "pz847sKnxvQS"
+      },
+      "source": [
+        "import skimage\n",
+        "import cv2\n",
+        "\n",
+        "# 從 skimage 取得內建的圖像\n",
+        "image01 = skimage.data.chelsea()\n",
+        "cv2.imshow(\"original\", image01)\n",
+        "\n",
+        "# 灰階化\n",
+        "img_gray = cv2.cvtColor(image01, cv2.COLOR_BGR2GRAY)\n",
+        "cv2.imshow(\"gray\", img_gray)\n",
+        "\n",
+        "cv2.waitKey(0)\n",
+        "cv2.destroyAllWindows()"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "701m3sHAxz25"
+      },
+      "source": [
+        "## 模糊化"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "6jyTBQc0x3yJ"
+      },
+      "source": [
+        "# 小模糊 \n",
+        "smallBlur01 = np.ones((6, 6), dtype=\"float\") * (1.0 / (6 * 6))\n",
+        "\n",
+        "convoleOutput01 = convolve(img_gray, smallBlur01)\n",
+        "opencvOutput01 = cv2.filter2D(img_gray, -1, smallBlur01)\n",
+        "cv2.imshow(\"small Blur\", convoleOutput01)\n",
+        "\n",
+        "# 大模糊\n",
+        "largeBlur01 = np.ones((20, 20), dtype=\"float\") * (1.0 / (20 * 20))\n",
+        "\n",
+        "convoleOutput02 = convolve(img_gray, largeBlur01)\n",
+        "opencvOutput02 = cv2.filter2D(img_gray, -1, largeBlur01)\n",
+        "cv2.imshow(\"large Blur\", convoleOutput02)\n",
+        "\n",
+        "cv2.waitKey(0)\n",
+        "cv2.destroyAllWindows()"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "avUuxO-Iyvem"
+      },
+      "source": [
+        "## 銳利化"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "Ep-9ECtly0nB"
+      },
+      "source": [
+        "sharpen01 = np.array((\n",
+        "    [0, -2, 0],\n",
+        "    [-2, 6, -2],\n",
+        "    [0, -2, 0]), dtype=\"int\")\n",
+        "\n",
+        "convoleOutput01 = convolve(gray, sharpen01)\n",
+        "opencvOutput01 = cv2.filter2D(gray, -1, sharpen01)\n",
+        "cv2.imshow(\"sharpen01\", convoleOutput01)\n",
+        "\n",
+        "cv2.waitKey(0)\n",
+        "cv2.destroyAllWindows()"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "SgdNHGofzmRW"
+      },
+      "source": [
+        "# **EX02. MNIST 模型強化**"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "BMzw3AyZ0NuS"
+      },
+      "source": [
+        "## Step01：載入 MNIST 手寫阿拉伯數字資料"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "bcdx4Fqsz54k",
+        "outputId": "ea41cbd1-d912-45cb-818f-714c9ce9fa78"
+      },
+      "source": [
+        "import tensorflow as tf\n",
+        "mnist = tf.keras.datasets.mnist\n",
+        "\n",
+        "# 載入 MNIST 手寫阿拉伯數字資料\n",
+        "(x_train_mnist, y_train_mnist),(x_test_mnist, y_test_mnist) = mnist.load_data()\n",
+        "\n",
+        "# 顏色範圍：0~255，所以，公式簡化為 x / 255\n",
+        "x_train_norm, x_test_norm = x_train_mnist / 255.0, x_test_mnist / 255.0"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Downloading data from https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz\n",
+            "11493376/11490434 [==============================] - 0s 0us/step\n",
+            "11501568/11490434 [==============================] - 0s 0us/step\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "deCge-IK1Nvh"
+      },
+      "source": [
+        "## Step02：CNN 模型"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "izo9qjdy1FRm"
+      },
+      "source": [
+        "# 建立模型\n",
+        "from tensorflow.keras import layers\n",
+        "import numpy as np\n",
+        "\n",
+        "input_image_shape=(26, 26, 1)\n",
+        "# 新增一維在最後面\n",
+        "x_train_norm = np.expand_dims(x_train_norm, -1)\n",
+        "x_test_norm = np.expand_dims(x_test_norm, -1)\n",
+        "\n",
+        "# CNN 模型\n",
+        "model = tf.keras.Sequential(\n",
+        "    [\n",
+        "        tf.keras.Input(shape=input_image_shape),\n",
+        "        layers.Conv2D(32, kernel_size=(4, 4), activation=\"relu\"),\n",
+        "        layers.MaxPooling2D(pool_size=(2, 2)),\n",
+        "        layers.Conv2D(64, kernel_size=(4, 4), activation=\"relu\"),\n",
+        "        layers.MaxPooling2D(pool_size=(2, 2)),\n",
+        "        layers.Flatten(),\n",
+        "        layers.Dropout(0.5),\n",
+        "        layers.Dense(10, activation=\"softmax\"),\n",
+        "    ]\n",
+        ")"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "YS48Ydqs16U4",
+        "outputId": "c2afea48-b804-481f-ab34-329c8a4cde80"
+      },
+      "source": [
+        "# 設定優化器(optimizer)、損失函數(loss)、效能衡量指標(metrics)的類別\n",
+        "model.compile(optimizer='adam',\n",
+        "              loss='sparse_categorical_crossentropy',\n",
+        "              metrics=['accuracy'])\n",
+        "\n",
+        "# 模型訓練\n",
+        "history01 = model.fit(x_train_norm, y_train_mnist, epochs=5, validation_split=0.2)\n",
+        "\n",
+        "# 評分(Score Model)\n",
+        "score01 = model.evaluate(x_test_norm, y_test_mnist, verbose=0)\n",
+        "\n",
+        "for i, x in enumerate(score01):\n",
+        "    print(f'{model.metrics_names[i]}: {score01[i]:.4f}')"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Epoch 1/5\n",
+            "WARNING:tensorflow:Model was constructed with shape (None, 26, 26, 1) for input KerasTensor(type_spec=TensorSpec(shape=(None, 26, 26, 1), dtype=tf.float32, name='input_1'), name='input_1', description=\"created by layer 'input_1'\"), but it was called on an input with incompatible shape (32, 28, 28, 1).\n",
+            "WARNING:tensorflow:Model was constructed with shape (None, 26, 26, 1) for input KerasTensor(type_spec=TensorSpec(shape=(None, 26, 26, 1), dtype=tf.float32, name='input_1'), name='input_1', description=\"created by layer 'input_1'\"), but it was called on an input with incompatible shape (32, 28, 28, 1).\n",
+            "1499/1500 [============================>.] - ETA: 0s - loss: 0.2261 - accuracy: 0.9311WARNING:tensorflow:Model was constructed with shape (None, 26, 26, 1) for input KerasTensor(type_spec=TensorSpec(shape=(None, 26, 26, 1), dtype=tf.float32, name='input_1'), name='input_1', description=\"created by layer 'input_1'\"), but it was called on an input with incompatible shape (32, 28, 28, 1).\n",
+            "1500/1500 [==============================] - 40s 26ms/step - loss: 0.2260 - accuracy: 0.9312 - val_loss: 0.0737 - val_accuracy: 0.9779\n",
+            "Epoch 2/5\n",
+            "1500/1500 [==============================] - 38s 25ms/step - loss: 0.0803 - accuracy: 0.9749 - val_loss: 0.0474 - val_accuracy: 0.9864\n",
+            "Epoch 3/5\n",
+            "1500/1500 [==============================] - 39s 26ms/step - loss: 0.0627 - accuracy: 0.9805 - val_loss: 0.0420 - val_accuracy: 0.9880\n",
+            "Epoch 4/5\n",
+            "1500/1500 [==============================] - 39s 26ms/step - loss: 0.0518 - accuracy: 0.9834 - val_loss: 0.0364 - val_accuracy: 0.9899\n",
+            "Epoch 5/5\n",
+            "1500/1500 [==============================] - 39s 26ms/step - loss: 0.0473 - accuracy: 0.9847 - val_loss: 0.0345 - val_accuracy: 0.9899\n",
+            "WARNING:tensorflow:Model was constructed with shape (None, 26, 26, 1) for input KerasTensor(type_spec=TensorSpec(shape=(None, 26, 26, 1), dtype=tf.float32, name='input_1'), name='input_1', description=\"created by layer 'input_1'\"), but it was called on an input with incompatible shape (None, 28, 28, 1).\n",
+            "loss: 0.0262\n",
+            "accuracy: 0.9907\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "Gzu92fTKPTRU",
+        "outputId": "19cad1ef-f5d2-4302-ad66-cb3818aac681"
+      },
+      "source": [
+        "model.summary()"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Model: \"sequential\"\n",
+            "_________________________________________________________________\n",
+            "Layer (type)                 Output Shape              Param #   \n",
+            "=================================================================\n",
+            "conv2d (Conv2D)              (None, 23, 23, 32)        544       \n",
+            "_________________________________________________________________\n",
+            "max_pooling2d (MaxPooling2D) (None, 11, 11, 32)        0         \n",
+            "_________________________________________________________________\n",
+            "conv2d_1 (Conv2D)            (None, 8, 8, 64)          32832     \n",
+            "_________________________________________________________________\n",
+            "max_pooling2d_1 (MaxPooling2 (None, 4, 4, 64)          0         \n",
+            "_________________________________________________________________\n",
+            "flatten (Flatten)            (None, 1024)              0         \n",
+            "_________________________________________________________________\n",
+            "dropout (Dropout)            (None, 1024)              0         \n",
+            "_________________________________________________________________\n",
+            "dense (Dense)                (None, 10)                10250     \n",
+            "=================================================================\n",
+            "Total params: 43,626\n",
+            "Trainable params: 43,626\n",
+            "Non-trainable params: 0\n",
+            "_________________________________________________________________\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "gRN1UUhVPyDu"
+      },
+      "source": [
+        "# **EX03. cifar10 辨識**"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "N31lqoA8QCUA"
+      },
+      "source": [
+        "## Step01：載入 cifar10 資料"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "WgJrQNHTPvqv",
+        "outputId": "9de38a45-3b0c-4756-babc-236e356b3107"
+      },
+      "source": [
+        "import tensorflow as tf\n",
+        "cifar10 = tf.keras.datasets.cifar10\n",
+        "\n",
+        "# 載入 cifar10 資料\n",
+        "(x_train_cifar10, y_train_cifar10),(x_test_cifar10, y_test_cifar10) = cifar10.load_data()\n",
+        "\n",
+        "# 訓練/測試資料的 X/Y 維度\n",
+        "print(x_train_cifar10.shape, y_train_cifar10.shape,x_test_cifar10.shape, y_test_cifar10.shape)"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Downloading data from https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz\n",
+            "170500096/170498071 [==============================] - 4s 0us/step\n",
+            "170508288/170498071 [==============================] - 4s 0us/step\n",
+            "(50000, 32, 32, 3) (50000, 1) (10000, 32, 32, 3) (10000, 1)\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "xE_nqELNRXRd"
+      },
+      "source": [
+        "## Step02：特徵工程，將特徵縮放成 (0, 1) 之間"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "dMTpz--3RBC5"
+      },
+      "source": [
+        "# 特徵縮放，使用常態化(Normalization)\n",
+        "x_train_norm, x_test_norm = x_train_cifar10 / 255, x_test_cifar10 / 255"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "qZKNoDImRwcr",
+        "outputId": "2f1c93c0-db09-41af-d66c-419ee9ea6c1a"
+      },
+      "source": [
+        "# 確認轉換成功\n",
+        "x_train_norm[0]"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "array([[[0.23137255, 0.24313725, 0.24705882],\n",
+              "        [0.16862745, 0.18039216, 0.17647059],\n",
+              "        [0.19607843, 0.18823529, 0.16862745],\n",
+              "        ...,\n",
+              "        [0.61960784, 0.51764706, 0.42352941],\n",
+              "        [0.59607843, 0.49019608, 0.4       ],\n",
+              "        [0.58039216, 0.48627451, 0.40392157]],\n",
+              "\n",
+              "       [[0.0627451 , 0.07843137, 0.07843137],\n",
+              "        [0.        , 0.        , 0.        ],\n",
+              "        [0.07058824, 0.03137255, 0.        ],\n",
+              "        ...,\n",
+              "        [0.48235294, 0.34509804, 0.21568627],\n",
+              "        [0.46666667, 0.3254902 , 0.19607843],\n",
+              "        [0.47843137, 0.34117647, 0.22352941]],\n",
+              "\n",
+              "       [[0.09803922, 0.09411765, 0.08235294],\n",
+              "        [0.0627451 , 0.02745098, 0.        ],\n",
+              "        [0.19215686, 0.10588235, 0.03137255],\n",
+              "        ...,\n",
+              "        [0.4627451 , 0.32941176, 0.19607843],\n",
+              "        [0.47058824, 0.32941176, 0.19607843],\n",
+              "        [0.42745098, 0.28627451, 0.16470588]],\n",
+              "\n",
+              "       ...,\n",
+              "\n",
+              "       [[0.81568627, 0.66666667, 0.37647059],\n",
+              "        [0.78823529, 0.6       , 0.13333333],\n",
+              "        [0.77647059, 0.63137255, 0.10196078],\n",
+              "        ...,\n",
+              "        [0.62745098, 0.52156863, 0.2745098 ],\n",
+              "        [0.21960784, 0.12156863, 0.02745098],\n",
+              "        [0.20784314, 0.13333333, 0.07843137]],\n",
+              "\n",
+              "       [[0.70588235, 0.54509804, 0.37647059],\n",
+              "        [0.67843137, 0.48235294, 0.16470588],\n",
+              "        [0.72941176, 0.56470588, 0.11764706],\n",
+              "        ...,\n",
+              "        [0.72156863, 0.58039216, 0.36862745],\n",
+              "        [0.38039216, 0.24313725, 0.13333333],\n",
+              "        [0.3254902 , 0.20784314, 0.13333333]],\n",
+              "\n",
+              "       [[0.69411765, 0.56470588, 0.45490196],\n",
+              "        [0.65882353, 0.50588235, 0.36862745],\n",
+              "        [0.70196078, 0.55686275, 0.34117647],\n",
+              "        ...,\n",
+              "        [0.84705882, 0.72156863, 0.54901961],\n",
+              "        [0.59215686, 0.4627451 , 0.32941176],\n",
+              "        [0.48235294, 0.36078431, 0.28235294]]])"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 9
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "SMvDXUxnR9s5",
+        "outputId": "71917afd-da39-4b47-c15e-5495c1d646d4"
+      },
+      "source": [
+        "x_test_norm[0]"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "array([[[0.61960784, 0.43921569, 0.19215686],\n",
+              "        [0.62352941, 0.43529412, 0.18431373],\n",
+              "        [0.64705882, 0.45490196, 0.2       ],\n",
+              "        ...,\n",
+              "        [0.5372549 , 0.37254902, 0.14117647],\n",
+              "        [0.49411765, 0.35686275, 0.14117647],\n",
+              "        [0.45490196, 0.33333333, 0.12941176]],\n",
+              "\n",
+              "       [[0.59607843, 0.43921569, 0.2       ],\n",
+              "        [0.59215686, 0.43137255, 0.15686275],\n",
+              "        [0.62352941, 0.44705882, 0.17647059],\n",
+              "        ...,\n",
+              "        [0.53333333, 0.37254902, 0.12156863],\n",
+              "        [0.49019608, 0.35686275, 0.1254902 ],\n",
+              "        [0.46666667, 0.34509804, 0.13333333]],\n",
+              "\n",
+              "       [[0.59215686, 0.43137255, 0.18431373],\n",
+              "        [0.59215686, 0.42745098, 0.12941176],\n",
+              "        [0.61960784, 0.43529412, 0.14117647],\n",
+              "        ...,\n",
+              "        [0.54509804, 0.38431373, 0.13333333],\n",
+              "        [0.50980392, 0.37254902, 0.13333333],\n",
+              "        [0.47058824, 0.34901961, 0.12941176]],\n",
+              "\n",
+              "       ...,\n",
+              "\n",
+              "       [[0.26666667, 0.48627451, 0.69411765],\n",
+              "        [0.16470588, 0.39215686, 0.58039216],\n",
+              "        [0.12156863, 0.34509804, 0.5372549 ],\n",
+              "        ...,\n",
+              "        [0.14901961, 0.38039216, 0.57254902],\n",
+              "        [0.05098039, 0.25098039, 0.42352941],\n",
+              "        [0.15686275, 0.33333333, 0.49803922]],\n",
+              "\n",
+              "       [[0.23921569, 0.45490196, 0.65882353],\n",
+              "        [0.19215686, 0.4       , 0.58039216],\n",
+              "        [0.1372549 , 0.33333333, 0.51764706],\n",
+              "        ...,\n",
+              "        [0.10196078, 0.32156863, 0.50980392],\n",
+              "        [0.11372549, 0.32156863, 0.49411765],\n",
+              "        [0.07843137, 0.25098039, 0.41960784]],\n",
+              "\n",
+              "       [[0.21176471, 0.41960784, 0.62745098],\n",
+              "        [0.21960784, 0.41176471, 0.58431373],\n",
+              "        [0.17647059, 0.34901961, 0.51764706],\n",
+              "        ...,\n",
+              "        [0.09411765, 0.30196078, 0.48627451],\n",
+              "        [0.13333333, 0.32941176, 0.50588235],\n",
+              "        [0.08235294, 0.2627451 , 0.43137255]]])"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 10
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "LGbNzz4-SiE2"
+      },
+      "source": [
+        "## Step03：建立模型結構"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "ICsEQbhOSU8m"
+      },
+      "source": [
+        "model = tf.keras.models.Sequential([\n",
+        "    tf.keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)),\n",
+        "    tf.keras.layers.MaxPooling2D((2, 2)),\n",
+        "    tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),\n",
+        "    tf.keras.layers.MaxPooling2D((2, 2)),\n",
+        "    tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),    \n",
+        "    tf.keras.layers.Flatten(),    \n",
+        "    tf.keras.layers.Dense(64, activation='relu'),    \n",
+        "    tf.keras.layers.Dense(10)    \n",
+        "])"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "TjQ1RevfTH5S"
+      },
+      "source": [
+        "## Step04：結合訓練資料及模型，進行模型訓練\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "3kctWzNRTEkG",
+        "outputId": "81d0777c-befc-49ba-ed4f-79372bc1ef35"
+      },
+      "source": [
+        "# 設定優化器(optimizer)、損失函數(loss)、效能衡量指標(metrics)的類別\n",
+        "model.compile(optimizer='adam',\n",
+        "              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),\n",
+        "              metrics=['accuracy'])\n",
+        "\n",
+        "# 模型訓練\n",
+        "history = model.fit(x_train_norm, y_train_cifar10, epochs=10, validation_split=0.2)"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Epoch 1/10\n",
+            "1250/1250 [==============================] - 49s 39ms/step - loss: 1.5553 - accuracy: 0.4278 - val_loss: 1.3072 - val_accuracy: 0.5347\n",
+            "Epoch 2/10\n",
+            "1250/1250 [==============================] - 48s 38ms/step - loss: 1.2032 - accuracy: 0.5712 - val_loss: 1.1287 - val_accuracy: 0.6012\n",
+            "Epoch 3/10\n",
+            "1250/1250 [==============================] - 48s 39ms/step - loss: 1.0456 - accuracy: 0.6313 - val_loss: 1.0204 - val_accuracy: 0.6425\n",
+            "Epoch 4/10\n",
+            "1250/1250 [==============================] - 49s 39ms/step - loss: 0.9408 - accuracy: 0.6710 - val_loss: 0.9589 - val_accuracy: 0.6653\n",
+            "Epoch 5/10\n",
+            "1250/1250 [==============================] - 49s 39ms/step - loss: 0.8549 - accuracy: 0.6977 - val_loss: 0.9202 - val_accuracy: 0.6836\n",
+            "Epoch 6/10\n",
+            "1250/1250 [==============================] - 50s 40ms/step - loss: 0.7896 - accuracy: 0.7220 - val_loss: 0.9123 - val_accuracy: 0.6874\n",
+            "Epoch 7/10\n",
+            "1250/1250 [==============================] - 50s 40ms/step - loss: 0.7341 - accuracy: 0.7425 - val_loss: 0.9074 - val_accuracy: 0.6895\n",
+            "Epoch 8/10\n",
+            "1250/1250 [==============================] - 49s 40ms/step - loss: 0.6850 - accuracy: 0.7596 - val_loss: 0.8760 - val_accuracy: 0.7040\n",
+            "Epoch 9/10\n",
+            "1250/1250 [==============================] - 49s 39ms/step - loss: 0.6397 - accuracy: 0.7750 - val_loss: 0.9070 - val_accuracy: 0.6995\n",
+            "Epoch 10/10\n",
+            "1250/1250 [==============================] - 49s 39ms/step - loss: 0.5956 - accuracy: 0.7904 - val_loss: 0.9113 - val_accuracy: 0.6958\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "v31N4rcRWBtZ"
+      },
+      "source": [
+        "## Step05：模型評分"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "_iwfxBshT_cr",
+        "outputId": "253d70d1-00dd-4f85-f5e3-0961c5d0af65"
+      },
+      "source": [
+        "score01=model.evaluate(x_test_norm, y_test_cifar10, verbose=0)\n",
+        "\n",
+        "for i, x in enumerate(score01):\n",
+        "    print(f'{model.metrics_names[i]}: {score01[i]:.4f}')"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "loss: 0.9292\n",
+            "accuracy: 0.6949\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 300
+        },
+        "id": "fyiOoeN6byWY",
+        "outputId": "2af9d350-1d73-4bba-b54d-c74496543a54"
+      },
+      "source": [
+        "import matplotlib.pyplot as plt\n",
+        "\n",
+        "plt.plot(history.history['accuracy'], label='accuracy')\n",
+        "plt.plot(history.history['val_accuracy'], label = 'val_accuracy')\n",
+        "plt.xlabel('Epoch')\n",
+        "plt.ylabel('Accuracy')\n",
+        "plt.ylim([0.5, 1])\n",
+        "plt.legend(loc='lower right')"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "<matplotlib.legend.Legend at 0x7f32e2914bd0>"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 14
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "image/png": "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CUFBQdx2220MGTKE2bNn8/777wPw6aef8sc//pH33nuvST+j82VB0BiHNjghUFYE3/0npExu1OYH8kp4+fM9fGdEIs9OG24TyBjThF555RU6derEiRMnuPDCC7n22mu57bbbWLZsGb179yY/Px+A3/zmN8TExLBx40YAjh49etZ9Z2Zmsnz5coKDgykqKuLzzz8nJCSERYsW8eijj/LOO+8wZ84c9u3bx7p16wgJCSE/P5/Y2FjuuusucnJy6NKlC6+++iq33HKLXz+Hc2FB4Kvtn8C8W5zJ429ZAN2GNnoXTy/cTnCQ8MjlAy0ETGZfuWMAAA4rSURBVJvky5G7v8yePbvmSDsjI4M5c+Ywbty4muvpO3Vy7s5ftGgRc+fOrdkuNjb2rPueNm0awcFO929hYSHf//732blzJyJCRUVFzX7vuOOOmq6j6ve7+eab+fvf/86sWbNYsWIFr7/+ehP9xU3HgsAXX/0JFvwcug1zrgw6y0Ty9dmQWcD89VncM6Ef8dERfijSGPdaunQpixYtYsWKFURGRjJ+/HguuOACtm3b5vM+al92Wfcu6aioqJrH//mf/8mECRN477332LdvH+PHjz/jfmfNmsXVV19NREQE06ZNa5HnGGxGkzPxVMJHP4VPfgYDrnBGDz2HEFBVnvp4G52iwvjRpX38UKgx7lZYWEhsbCyRkZFs27aNr776itLSUpYtW8bevXsBarqGJk+ezIsvvlizbXXXUHx8PFu3bqWqquqMffiFhYUkJjpzgbz22ms1z0+ePJk///nPVFZWnvJ+CQkJJCQk8OSTTzJr1qym+6ObkAVBQ8qKnYlkvp4DY+6FG/4GYVFn364ey3bmsnx3HvdO7EeHCDs5bExTmzp1KpWVlQwaNIhHHnmEiy++mC5dujBnzhyuu+46hg8fzvTp0wH45S9/ydGjRxk6dCjDhw9nyZIlADz11FNcddVVjBkzhu7duzf4Xg8//DA///nPGTFiRE2jD3DrrbeSnJzMsGHDGD58OG+++WbNazfeeCM9evRg0KBBfvoEzo8NOlefwkznpPCRrXDlM5B27id3qqqUK//wBcfKKlj80HibVtK0OVu3bm2xDVxLcc899zBixAh++MMfNsv71fffxAada4ystfDmDKgogRvfhn6Tzmt37687yNZDRTw/4wILAWNcaNSoUURFRfHss88G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\n",
+            "text/plain": [
+              "<Figure size 432x288 with 1 Axes>"
+            ]
+          },
+          "metadata": {
+            "needs_background": "light"
+          }
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "lWcRMCB7WbCh",
+        "outputId": "800c6a8e-0211-4091-c132-78141d18e7cc"
+      },
+      "source": [
+        "model.summary()"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Model: \"sequential_1\"\n",
+            "_________________________________________________________________\n",
+            "Layer (type)                 Output Shape              Param #   \n",
+            "=================================================================\n",
+            "conv2d_2 (Conv2D)            (None, 30, 30, 32)        896       \n",
+            "_________________________________________________________________\n",
+            "max_pooling2d_2 (MaxPooling2 (None, 15, 15, 32)        0         \n",
+            "_________________________________________________________________\n",
+            "conv2d_3 (Conv2D)            (None, 13, 13, 64)        18496     \n",
+            "_________________________________________________________________\n",
+            "max_pooling2d_3 (MaxPooling2 (None, 6, 6, 64)          0         \n",
+            "_________________________________________________________________\n",
+            "conv2d_4 (Conv2D)            (None, 4, 4, 64)          36928     \n",
+            "_________________________________________________________________\n",
+            "flatten_1 (Flatten)          (None, 1024)              0         \n",
+            "_________________________________________________________________\n",
+            "dense_1 (Dense)              (None, 64)                65600     \n",
+            "_________________________________________________________________\n",
+            "dense_2 (Dense)              (None, 10)                650       \n",
+            "=================================================================\n",
+            "Total params: 122,570\n",
+            "Trainable params: 122,570\n",
+            "Non-trainable params: 0\n",
+            "_________________________________________________________________\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "m625tQiBdtKo"
+      },
+      "source": [
+        "# **EX04. MNIST 模型強化_資料增補**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "MgnjRXCDWkkL"
+      },
+      "source": [
+        "import tensorflow as tf\n",
+        "mnist = tf.keras.datasets.mnist\n",
+        "\n",
+        "# 載入 MNIST 手寫阿拉伯數字資料\n",
+        "(x_train_mnist, y_train_mnist),(x_test_mnist, y_test_mnist) = mnist.load_data()"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "Scw_H8IzeD4c"
+      },
+      "source": [
+        "# 建立模型\n",
+        "from tensorflow.keras import layers\n",
+        "import numpy as np\n",
+        "\n",
+        "input_image_shape=(27, 27, 1)\n",
+        "# 新增一維在最後面\n",
+        "x_train_mnist = np.expand_dims(x_train_mnist, -1)\n",
+        "x_test_mnist = np.expand_dims(x_test_mnist, -1)\n",
+        "\n",
+        "# CNN 模型\n",
+        "model = tf.keras.Sequential(\n",
+        "    [\n",
+        "        tf.keras.Input(shape=input_image_shape),\n",
+        "        layers.Conv2D(32, kernel_size=(4, 4), activation=\"relu\"),\n",
+        "        layers.MaxPooling2D(pool_size=(2, 2)),\n",
+        "        layers.Conv2D(64, kernel_size=(4, 4), activation=\"relu\"),\n",
+        "        layers.MaxPooling2D(pool_size=(2, 2)),\n",
+        "        layers.Flatten(),\n",
+        "        layers.Dropout(0.5),\n",
+        "        layers.Dense(10, activation=\"softmax\"),\n",
+        "    ]\n",
+        ")\n",
+        "\n",
+        "# 設定優化器(optimizer)、損失函數(loss)、效能衡量指標(metrics)的類別\n",
+        "model.compile(optimizer='adam',\n",
+        "              loss='sparse_categorical_crossentropy',\n",
+        "              metrics=['accuracy'])"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "Mq82vqZHeQfI"
+      },
+      "source": [
+        "## 資料增補"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "MFn-KgKpeOdQ",
+        "outputId": "fac11c89-8da9-4191-c67f-8decd70e253d"
+      },
+      "source": [
+        "# 參數設定\n",
+        "batch_size = 1000\n",
+        "epochs = 5\n",
+        "\n",
+        "# 資料增補定義\n",
+        "datagen = tf.keras.preprocessing.image.ImageDataGenerator(\n",
+        "        rescale=1./255, # 特徵縮放\n",
+        "        rotation_range=15,  # 旋轉 15 度\n",
+        "        zoom_range=0.15, # 拉遠/拉近 20%\n",
+        "        width_shift_range=0.15,  # 寬度偏移  0.15%\n",
+        "        height_shift_range=0.15) # 高度偏移  0.15%\n",
+        "\n",
+        "# 增補資料，進行模型訓練\n",
+        "datagen.fit(x_train_mnist)\n",
+        "history = model.fit(datagen.flow(x_train_mnist, y_train_mnist, batch_size=batch_size), epochs=epochs,\n",
+        "          validation_data=datagen.flow(x_test_mnist, y_test_mnist, batch_size=batch_size), verbose=2,\n",
+        "          steps_per_epoch=x_train_mnist.shape[0]//batch_size)"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Epoch 1/5\n",
+            "60/60 - 54s - loss: 1.6663 - accuracy: 0.4354 - val_loss: 0.9017 - val_accuracy: 0.7290\n",
+            "Epoch 2/5\n",
+            "60/60 - 53s - loss: 0.8191 - accuracy: 0.7365 - val_loss: 0.5079 - val_accuracy: 0.8549\n",
+            "Epoch 3/5\n",
+            "60/60 - 53s - loss: 0.5790 - accuracy: 0.8200 - val_loss: 0.3780 - val_accuracy: 0.8900\n",
+            "Epoch 4/5\n",
+            "60/60 - 53s - loss: 0.4701 - accuracy: 0.8566 - val_loss: 0.2980 - val_accuracy: 0.9160\n",
+            "Epoch 5/5\n",
+            "60/60 - 52s - loss: 0.3985 - accuracy: 0.8777 - val_loss: 0.2589 - val_accuracy: 0.9261\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "hSUn1GLqe0pb",
+        "outputId": "937e792d-a9fb-4829-ee7a-289f21f679d0"
+      },
+      "source": [
+        "# 評分(Score Model)\n",
+        "score01=model.evaluate(x_test_mnist, y_test_mnist, verbose=0)\n",
+        "\n",
+        "for i, x in enumerate(score01):\n",
+        "    print(f'{model.metrics_names[i]}: {score01[i]:.4f}')"
+      ],
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "WARNING:tensorflow:Model was constructed with shape (None, 27, 27, 1) for input KerasTensor(type_spec=TensorSpec(shape=(None, 27, 27, 1), dtype=tf.float32, name='input_2'), name='input_2', description=\"created by layer 'input_2'\"), but it was called on an input with incompatible shape (None, 28, 28, 1).\n",
+            "loss: 10.6118\n",
+            "accuracy: 0.9716\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "mmUyVOdOhTnp"
+      },
+      "source": [
+        ""
+      ],
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
